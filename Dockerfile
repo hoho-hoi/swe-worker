@@ -7,6 +7,10 @@ RUN apt-get update -y \
   && apt-get install -y --no-install-recommends git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
+RUN adduser --disabled-password --gecos "" agent
+RUN mkdir -p /work/repo /work/state /work/logs /work/out \
+  && chown -R agent:agent /work
+
 WORKDIR /app
 RUN pip install --no-cache-dir uv==0.7.2
 
@@ -18,8 +22,8 @@ RUN uv sync --frozen --no-dev
 COPY app /app/app
 COPY README.md /app/README.md
 
-ENV DATA_DIR=/data
 EXPOSE 8000
 
+USER agent
 CMD ["uv", "run", "python", "-m", "app.worker_server"]
 

@@ -8,6 +8,7 @@ from app.github_client import Issue, IssueComment, PullRequest, PullRequestCreat
 from app.pr_template import PullRequestBodyRenderer
 from app.providers.base import Provider, ProviderResult, Task
 from app.state_store import StateStore
+from app.work_paths import get_work_paths
 
 
 class _FakeProvider(Provider):
@@ -81,7 +82,7 @@ class _FakeGitHubClient:
 
 
 def test_engineer_loop_creates_pr_and_updates_state(tmp_path: Path) -> None:
-    store = StateStore(str(tmp_path))
+    store = StateStore(paths=get_work_paths(work_root=tmp_path))
     gh = _FakeGitHubClient(
         issue=Issue(number=123, title="Test issue", body="Body"),
         comments=[IssueComment(id=10, body="c1"), IssueComment(id=11, body="c2")],
@@ -131,7 +132,7 @@ def test_engineer_loop_creates_pr_and_updates_state(tmp_path: Path) -> None:
 
 
 def test_engineer_loop_rerun_reuses_existing_pr(tmp_path: Path) -> None:
-    store = StateStore(str(tmp_path))
+    store = StateStore(paths=get_work_paths(work_root=tmp_path))
     _ = store.load_or_initialize(
         repo="owner/repo",
         issue_number=123,

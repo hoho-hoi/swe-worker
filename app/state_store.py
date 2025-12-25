@@ -1,6 +1,6 @@
 """State persistence for an issue worker.
 
-State is stored as JSON under ``${DATA_DIR}/state/state.json``.
+State is stored as JSON under ``/work/state/state.json`` (container-local).
 The implementation uses atomic file replacement to avoid partial writes.
 """
 
@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Final
 
 from pydantic import BaseModel, Field
+
+from app.work_paths import WorkPaths
 
 
 class WorkerState(BaseModel):
@@ -31,30 +30,15 @@ class WorkerState(BaseModel):
     last_error: str | None = Field(default=None)
 
 
-@dataclass(frozen=True)
-class StatePaths:
-    """Resolved file paths under DATA_DIR."""
-
-    data_dir: Path
-    repo_dir: Path
-    state_dir: Path
-    state_file: Path
-    logs_dir: Path
-    out_dir: Path
-
-
 class StateStore:
     """Read/write access to ``WorkerState``."""
 
-    _STATE_RELATIVE_PATH: Final[str] = "state/state.json"
-
-    def __init__(self, data_dir: str) -> None:
-        self._data_dir = Path(data_dir)
-        self._paths = self._resolve_paths(self._data_dir)
+    def __init__(self, *, paths: WorkPaths) -> None:
+        self._paths = paths
 
     @property
-    def paths(self) -> StatePaths:
-        """Returns resolved paths under the configured DATA_DIR."""
+    def paths(self) -> WorkPaths:
+        """Returns resolved paths under WORK_ROOT."""
 
         return self._paths
 
@@ -109,19 +93,3 @@ class StateStore:
         serialized = json.dumps(state.model_dump(), indent=2, ensure_ascii=False)
         tmp_path.write_text(serialized + "\n", encoding="utf-8")
         os.replace(tmp_path, self._paths.state_file)
-
-    @staticmethod
-    def _resolve_paths(data_dir: Path) -> StatePaths:
-        repo_dir = data_dir / "repo"
-        state_dir = data_dir / "state"
-        state_file = data_dir / StateStore._STATE_RELATIVE_PATH
-        logs_dir = data_dir / "logs"
-        out_dir = data_dir / "out"
-        return StatePaths(
-            data_dir=data_dir,
-            repo_dir=repo_dir,
-            state_dir=state_dir,
-            state_file=state_file,
-            logs_dir=logs_dir,
-            out_dir=out_dir,
-        )

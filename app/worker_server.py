@@ -26,6 +26,7 @@ from app.pr_template import PullRequestBodyRenderer, get_default_template_dir
 from app.providers.noop import NoOpProvider
 from app.providers.openhands import OpenHandsProvider, OpenHandsProviderConfig
 from app.state_store import StateStore
+from app.work_paths import get_default_work_paths, get_work_paths
 
 
 class EventPayload(BaseModel):
@@ -54,14 +55,21 @@ class EnqueueResult:
 class WorkerRuntime:
     """Background runtime that processes events sequentially."""
 
-    def __init__(self, *, settings: AppSettings) -> None:
+    def __init__(self, *, settings: AppSettings, work_root: str | None = None) -> None:
         self._settings = settings
         self._stop_thread_event = threading.Event()
         self._queue: asyncio.Queue[WorkerEvent] = asyncio.Queue()
         self._consumer_task: asyncio.Task[None] | None = None
 
-        self._state_store = StateStore(self._settings.data_dir)
+        paths = (
+            get_work_paths(work_root=work_root)
+            if work_root is not None
+            else get_default_work_paths()
+        )
+        self._state_store = StateStore(paths=paths)
         self._state_store.ensure_directories()
+        self._openhands_home_dir = self._state_store.paths.state_dir / "openhands_home"
+        self._openhands_home_dir.mkdir(parents=True, exist_ok=True)
 
         self._github_client = self._build_github_client()
         self._git_ops = GitOps(
@@ -163,6 +171,8 @@ class WorkerRuntime:
 
     def _build_openhands_env(self) -> dict[str, str]:
         env: dict[str, str] = {}
+        # Persist OpenHands CLI settings under WORK_ROOT by overriding HOME.
+        env["HOME"] = str(self._openhands_home_dir)
 
         # Pass through common provider keys.
         if self._settings.openai_api_key is not None:
@@ -188,12 +198,12 @@ class WorkerRuntime:
         return env
 
 
-def create_app() -> FastAPI:
+def create_app(*, work_root: str | None = None) -> FastAPI:
     """Creates FastAPI app."""
 
     logging.basicConfig(level=logging.INFO)
     settings = AppSettings()
-    runtime = WorkerRuntime(settings=settings)
+    runtime = WorkerRuntime(settings=settings, work_root=work_root)
 
     app = FastAPI()
     app.state.runtime = runtime

@@ -5,7 +5,7 @@ GitHub Issue をトリガに、**Issueごとに常駐するWorkerコンテナ**�
 ## 前提
 
 - 依存管理は **`pyproject.toml` + `uv`** です（`requirements.txt` は使いません）
-- 作業ツリーと状態は `DATA_DIR`（デフォルト `/data`）配下に永続化します
+- 作業ツリーと状態は **コンテナ内の `/work`** 配下に作成されます（volume不要）
 - OpenHands CLI をプロジェクト依存として入れる場合、現状は **Python 3.12** が必要です（`openhands==1.6.0` 要件）
 
 ## セットアップ（ローカル）
@@ -18,21 +18,27 @@ uv sync --group dev
 
 ## 起動（ローカル）
 
-`.env` に書いてもOKです（`AppSettings` が `.env` を読みます）。例:
+`.env` に書いてもOKです（`AppSettings` が `.env` を読みます）。例（`LLM_MODEL` は OpenHandsの `llm.model` を生成する入力です）:
 
 ```bash
 # .env（例）
-GITHUB_TOKEN=***
-ENGINEER_PAT_KEY=***   # GITHUB_TOKENの代替（どちらか必須）
-OPENAI_API_KEY=***
-LLM_MODEL=***          # 推奨: Provider非依存のモデル名（未指定ならOpenHands側のデフォルト）
-OPENAI_MODEL=***       # OpenAI向けにモデル名を明示したい場合（LLM_MODELと同時指定は非推奨）
-GEMINI_API_KEY=***     # Geminiを使う場合
+GITHUB_TOKEN=<YOUR_GITHUB_TOKEN>
+# ENGINEER_PAT_KEY=<YOUR_GITHUB_TOKEN>   # GITHUB_TOKENの代替（どちらか必須）
+
+# OpenAI（推奨: provider付き）
+OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
+LLM_MODEL=openai/<model>
+
+# Gemini（どちらか）
+# GOOGLE_API_KEY=<YOUR_GOOGLE_API_KEY>
+# GEMINI_API_KEY=<YOUR_GEMINI_API_KEY>
+# LLM_MODEL=gemini/<model>
+
+# 代替（OpenAIのみを想定する場合）
+# OPENAI_MODEL=<model>
 ```
 
 ```bash
-export DATA_DIR="./data"
-export GITHUB_TOKEN="***"
 export REPO="owner/repo"
 export ISSUE_NUMBER="123"
 export BASE_BRANCH="main"
@@ -80,9 +86,7 @@ curl -sS -X POST http://127.0.0.1:8000/stop
 ```bash
 docker build -t swe-worker:local .
 docker run --rm -p 8000:8000 \
-  -e GITHUB_TOKEN="***" \
-  -e DATA_DIR="/data" \
-  -v "$(pwd)/data:/data" \
+  --env-file .env \
   swe-worker:local
 ```
 
@@ -95,10 +99,11 @@ docker run --rm -p 8000:8000 \
 
 ### `OPENAI_API_KEY を入れたとき、どのモデルが使われる？`
 
-このWorker自体は **モデルを自動選択しません**。`LLM_MODEL` / `OPENAI_MODEL` は **OpenHandsに環境変数としてそのまま渡され**、実際にどちらが使われるかは OpenHands側の仕様/設定に依存します。
+このWorkerは `LLM_MODEL`（推奨: `provider/<model>`）から **OpenHandsの設定ファイル（`agent_settings.json`）を生成**し、その `llm.model` が使われます。
 
-- `LLM_MODEL` と `OPENAI_MODEL` の **同時指定は避けて**、どちらか片方だけを指定する運用を推奨します
-- どちらも無ければ **OpenHands側のデフォルト**になります
+- `LLM_MODEL=openai/<model>` の場合: `OPENAI_API_KEY` が必要
+- `LLM_MODEL=gemini/<model>` の場合: `GOOGLE_API_KEY` または `GEMINI_API_KEY` が必要
+- `OPENAI_MODEL` は `LLM_MODEL` 未指定時の補助（`openai/<model>` として扱う）
 
 ### `No such file or directory: 'openhands'`
 

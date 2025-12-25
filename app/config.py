@@ -19,9 +19,6 @@ class AppSettings(BaseSettings):
         env_file_encoding="utf-8",
     )
 
-    # Persistence
-    data_dir: str = "/data"
-
     # GitHub auth and repository context
     github_token: str | None = None
     engineer_pat_key: str | None = None

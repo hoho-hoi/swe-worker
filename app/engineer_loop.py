@@ -6,6 +6,8 @@ in a background thread by the HTTP server.
 
 from __future__ import annotations
 
+import json
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -202,6 +204,7 @@ class EngineerLoop:
             state.last_run_status = "success" if provider_result.success else "failed"
             state.last_error = None if provider_result.success else provider_result.summary
             self._state_store.save(state)
+            self._write_result_file(state=state, pr_url=pr_url)
 
             comment_body = (
                 self._build_success_comment(
@@ -227,17 +230,20 @@ class EngineerLoop:
             state.last_run_status = "failed"
             state.last_error = str(exc)
             self._state_store.save(state)
+            self._write_result_file(state=state, pr_url=None)
             return RunResult(success=False, message=str(exc))
         except (GitHubApiError, GitCommandError) as exc:
             state.last_run_status = "failed"
             state.last_error = str(exc)
             self._state_store.save(state)
+            self._write_result_file(state=state, pr_url=None)
             self._safe_report_failure(repo=repo, issue_number=issue_number, error=str(exc))
             return RunResult(success=False, message=str(exc))
         except Exception as exc:  # noqa: BLE001
             state.last_run_status = "failed"
             state.last_error = f"Unhandled error: {exc}"
             self._state_store.save(state)
+            self._write_result_file(state=state, pr_url=None)
             self._safe_report_failure(repo=repo, issue_number=issue_number, error=str(exc))
             return RunResult(success=False, message=str(exc))
 
@@ -334,4 +340,28 @@ class EngineerLoop:
             )
         except Exception:  # noqa: BLE001
             # Avoid masking original failure.
+            return
+
+    def _write_result_file(self, *, state: WorkerState, pr_url: str | None) -> None:
+        """Writes a machine-readable result under /work/out/result.json (best-effort)."""
+
+        try:
+            self._state_store.ensure_directories()
+            out_path = self._state_store.paths.out_dir / "result.json"
+            tmp_path = out_path.with_suffix(".json.tmp")
+            payload = {
+                "repo": state.repo,
+                "issue_number": state.issue_number,
+                "base_branch": state.base_branch,
+                "branch": state.branch,
+                "pr_number": state.pr_number,
+                "pr_url": pr_url,
+                "last_seen_comment_id": state.last_seen_comment_id,
+                "last_head_sha": state.last_head_sha,
+                "last_run_status": state.last_run_status,
+                "last_error": state.last_error,
+            }
+            tmp_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+            os.replace(tmp_path, out_path)
+        except Exception:  # noqa: BLE001
             return
