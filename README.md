@@ -25,7 +25,8 @@ uv sync --group dev
 GITHUB_TOKEN=***
 ENGINEER_PAT_KEY=***   # GITHUB_TOKENの代替（どちらか必須）
 OPENAI_API_KEY=***
-LLM_MODEL=***          # OpenHandsに渡すモデル（未指定ならOpenHands側のデフォルト）
+LLM_MODEL=***          # 推奨: Provider非依存のモデル名（未指定ならOpenHands側のデフォルト）
+OPENAI_MODEL=***       # OpenAI向けにモデル名を明示したい場合（LLM_MODELと同時指定は非推奨）
 GEMINI_API_KEY=***     # Geminiを使う場合
 ```
 
@@ -94,11 +95,10 @@ docker run --rm -p 8000:8000 \
 
 ### `OPENAI_API_KEY を入れたとき、どのモデルが使われる？`
 
-このWorker自体は **モデルを自動選択しません**。モデルは次の優先順で **OpenHandsに環境変数として渡されます**:
+このWorker自体は **モデルを自動選択しません**。`LLM_MODEL` / `OPENAI_MODEL` は **OpenHandsに環境変数としてそのまま渡され**、実際にどちらが使われるかは OpenHands側の仕様/設定に依存します。
 
-- `LLM_MODEL`（設定されていればこれ）
-- `OPENAI_MODEL`（設定されていればこれ）
-- どちらも無ければ **OpenHands側のデフォルト**（OpenHandsの設定/仕様に依存）
+- `LLM_MODEL` と `OPENAI_MODEL` の **同時指定は避けて**、どちらか片方だけを指定する運用を推奨します
+- どちらも無ければ **OpenHands側のデフォルト**になります
 
 ### `No such file or directory: 'openhands'`
 
