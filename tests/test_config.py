@@ -23,4 +23,3 @@ def test_app_settings_can_load_from_dotenv(tmp_path: Path) -> None:
     assert settings.engineer_pat_key == "pat_from_env_file"
     assert settings.openai_api_key == "openai_from_env_file"
     assert settings.gemini_api_key == "gemini_from_env_file"
-

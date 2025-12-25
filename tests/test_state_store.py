@@ -40,4 +40,3 @@ def test_state_store_save_is_atomic_and_load_roundtrips(tmp_path: Path) -> None:
 
     loaded = store.load()
     assert loaded.model_dump() == state.model_dump()
-

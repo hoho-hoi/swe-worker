@@ -18,4 +18,3 @@ def test_pr_body_renderer_appends_closes_line_when_missing(tmp_path: Path) -> No
         data=PullRequestBodyInput(issue_number=42, summary="did x", how_to_test="ran y")
     )
     assert "Closes #42" in body
-
