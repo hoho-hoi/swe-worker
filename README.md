@@ -18,6 +18,17 @@ uv sync --group dev
 
 ## 起動（ローカル）
 
+`.env` に書いてもOKです（`AppSettings` が `.env` を読みます）。例:
+
+```bash
+# .env（例）
+GITHUB_TOKEN=***
+ENGINEER_PAT_KEY=***   # GITHUB_TOKENの代替（どちらか必須）
+OPENAI_API_KEY=***
+LLM_MODEL=***          # OpenHandsに渡すモデル（未指定ならOpenHands側のデフォルト）
+GEMINI_API_KEY=***     # Geminiを使う場合
+```
+
 ```bash
 export DATA_DIR="./data"
 export GITHUB_TOKEN="***"
@@ -80,6 +91,14 @@ docker run --rm -p 8000:8000 \
 - git remote URL に token を埋め込んで永続化しない設計です（push/clone は `git -c http.*.extraheader=...` を使用）
 
 ## トラブルシュート
+
+### `OPENAI_API_KEY を入れたとき、どのモデルが使われる？`
+
+このWorker自体は **モデルを自動選択しません**。モデルは次の優先順で **OpenHandsに環境変数として渡されます**:
+
+- `LLM_MODEL`（設定されていればこれ）
+- `OPENAI_MODEL`（設定されていればこれ）
+- どちらも無ければ **OpenHands側のデフォルト**（OpenHandsの設定/仕様に依存）
 
 ### `No such file or directory: 'openhands'`
 

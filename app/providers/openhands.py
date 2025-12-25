@@ -20,6 +20,7 @@ class OpenHandsProviderConfig:
     """Configuration for OpenHandsProvider."""
 
     command_line: str
+    additional_env: dict[str, str]
 
 
 class OpenHandsProvider(Provider):
@@ -49,11 +50,14 @@ class OpenHandsProvider(Provider):
         task_file = task_dir / "task.md"
         task_file.write_text(self._render_task_markdown(task), encoding="utf-8")
 
+        env = dict(self._config.additional_env)
+        env["SWE_WORKER_TASK_FILE"] = str(task_file)
+
         try:
             result = self._runner.run(
                 args=list(self._command_args),
                 cwd=repo_dir,
-                env={"SWE_WORKER_TASK_FILE": str(task_file)},
+                env=env,
             )
         except FileNotFoundError:
             return ProviderResult(

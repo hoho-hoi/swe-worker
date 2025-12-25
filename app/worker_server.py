@@ -113,9 +113,9 @@ class WorkerRuntime:
                 self._queue.task_done()
 
     def _run_blocking(self, event: WorkerEvent) -> None:
-        token = self._settings.github_token
+        token = self._get_github_token()
         if token is None:
-            raise RuntimeError("GITHUB_TOKEN is required.")
+            raise RuntimeError("GITHUB_TOKEN (or ENGINEER_PAT_KEY) is required.")
 
         verify_commands = self._parse_verify_commands(self._settings.verify_commands)
         loop = EngineerLoop(
@@ -130,7 +130,7 @@ class WorkerRuntime:
         loop.run(event=event, stop_checker=self.stop_checker)
 
     def _build_github_client(self) -> GitHubClient:
-        token = self._settings.github_token
+        token = self._get_github_token()
         if token is None:
             # Lazy failure on /event; allow /health.
             token = "missing"
@@ -145,7 +145,10 @@ class WorkerRuntime:
         if self._settings.openhands_command is None:
             return NoOpProvider(message="OpenHands is not configured (set OPENHANDS_COMMAND).")
         return OpenHandsProvider(
-            config=OpenHandsProviderConfig(command_line=self._settings.openhands_command)
+            config=OpenHandsProviderConfig(
+                command_line=self._settings.openhands_command,
+                additional_env=self._build_openhands_env(),
+            )
         )
 
     @staticmethod
@@ -154,6 +157,35 @@ class WorkerRuntime:
             return []
         lines = [line.strip() for line in raw.splitlines()]
         return [line for line in lines if line and not line.startswith("#")]
+
+    def _get_github_token(self) -> str | None:
+        return self._settings.github_token or self._settings.engineer_pat_key
+
+    def _build_openhands_env(self) -> dict[str, str]:
+        env: dict[str, str] = {}
+
+        # Pass through common provider keys.
+        if self._settings.openai_api_key is not None:
+            env["OPENAI_API_KEY"] = self._settings.openai_api_key
+        if self._settings.openai_base_url is not None:
+            env["OPENAI_BASE_URL"] = self._settings.openai_base_url
+        if self._settings.openai_model is not None:
+            env["OPENAI_MODEL"] = self._settings.openai_model
+
+        if self._settings.llm_api_key is not None:
+            env["LLM_API_KEY"] = self._settings.llm_api_key
+        if self._settings.llm_base_url is not None:
+            env["LLM_BASE_URL"] = self._settings.llm_base_url
+        if self._settings.llm_model is not None:
+            env["LLM_MODEL"] = self._settings.llm_model
+
+        # Gemini / Google
+        if self._settings.gemini_api_key is not None:
+            env["GEMINI_API_KEY"] = self._settings.gemini_api_key
+        if self._settings.google_api_key is not None:
+            env["GOOGLE_API_KEY"] = self._settings.google_api_key
+
+        return env
 
 
 def create_app() -> FastAPI:

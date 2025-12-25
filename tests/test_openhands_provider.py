@@ -32,7 +32,7 @@ class _SuccessRunner:
 
 def test_openhands_provider_returns_failure_when_command_not_found(tmp_path: Path) -> None:
     provider = OpenHandsProvider(
-        config=OpenHandsProviderConfig(command_line="openhands"),
+        config=OpenHandsProviderConfig(command_line="openhands", additional_env={}),
         runner=_FileNotFoundRunner(),
     )
     result = provider.run(
@@ -53,7 +53,7 @@ def test_openhands_provider_returns_failure_when_command_not_found(tmp_path: Pat
 def test_openhands_provider_parses_command_line(tmp_path: Path) -> None:
     runner = _SuccessRunner()
     provider = OpenHandsProvider(
-        config=OpenHandsProviderConfig(command_line="uv run openhands"),
+        config=OpenHandsProviderConfig(command_line="uv run openhands", additional_env={}),
         runner=runner,
     )
     result = provider.run(
