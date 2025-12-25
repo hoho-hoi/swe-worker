@@ -1,3 +1,12 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
+
+# Worker persistence (runtime volume)
+data/
+/data/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
