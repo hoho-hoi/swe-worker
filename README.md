@@ -53,7 +53,7 @@ export BASE_BRANCH="main"
 # - 引数付きもOK（例: "uv run openhands"）
 export OPENHANDS_COMMAND="openhands"
 
-uv run python -m app.worker_server
+uv run python -m app.api.worker_server
 ```
 
 ## API

@@ -11,7 +11,7 @@ import os
 
 from pydantic import BaseModel, Field
 
-from app.work_paths import WorkPaths
+from app.runtime.work_paths import WorkPaths
 
 
 class WorkerState(BaseModel):
@@ -93,3 +93,5 @@ class StateStore:
         serialized = json.dumps(state.model_dump(), indent=2, ensure_ascii=False)
         tmp_path.write_text(serialized + "\n", encoding="utf-8")
         os.replace(tmp_path, self._paths.state_file)
+
+

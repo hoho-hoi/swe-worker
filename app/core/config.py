@@ -6,8 +6,6 @@ avoids printing secret values.
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -73,7 +71,7 @@ class AppSettings(BaseSettings):
         mode="before",
     )
     @classmethod
-    def _normalize_env_string(cls, value: Any) -> Any:
+    def _normalize_env_string(cls, value: object) -> object:
         """Normalizes env var strings.
 
         Docker's `--env-file` does not strip quotes. To avoid subtle auth failures
@@ -87,3 +85,5 @@ class AppSettings(BaseSettings):
         if len(text) >= 2 and ((text[0] == text[-1] == '"') or (text[0] == text[-1] == "'")):
             text = text[1:-1].strip()
         return text or None
+
+

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.state_store import StateStore, WorkerState
-from app.work_paths import get_work_paths
+from app.runtime.state_store import StateStore, WorkerState
+from app.runtime.work_paths import get_work_paths
 
 
 def test_state_store_load_or_initialize_creates_state_file(tmp_path: Path) -> None:

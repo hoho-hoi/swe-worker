@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.pr_template import PullRequestBodyInput, PullRequestBodyRenderer
+from app.rendering.pr_template import PullRequestBodyInput, PullRequestBodyRenderer
 
 
 def test_pr_body_renderer_appends_closes_line_when_missing(tmp_path: Path) -> None:

@@ -8,15 +8,17 @@ from __future__ import annotations
 
 import shlex
 
-from app.config import AppSettings
-from app.github_client import GitHubApiError, GitHubClient, GitHubClientConfig
-from app.git_ops import GitCommandError, GitOps, GitOpsConfig
+from app.core.config import AppSettings
+from app.integrations.git.git_ops import GitCommandError, GitOps, GitOpsConfig
+from app.integrations.github.github_client import (
+    GitHubApiError,
+    GitHubClient,
+    GitHubClientConfig,
+)
 
 
 class ValidationError(RuntimeError):
     """Raised when validation fails."""
-
-    pass
 
 
 def validate_github_token(*, token: str, api_base_url: str) -> None:
@@ -29,9 +31,7 @@ def validate_github_token(*, token: str, api_base_url: str) -> None:
     Raises:
         ValidationError: If token is invalid or lacks required permissions.
     """
-    client = GitHubClient(
-        config=GitHubClientConfig(api_base_url=api_base_url, token=token)
-    )
+    client = GitHubClient(config=GitHubClientConfig(api_base_url=api_base_url, token=token))
     try:
         # Try to get the authenticated user to verify token validity.
         # This endpoint requires minimal permissions.
@@ -75,6 +75,7 @@ def validate_github_git_access(*, token: str) -> None:
             "Please verify that GITHUB_TOKEN (or ENGINEER_PAT_KEY) is set correctly."
         )
 
+
 def validate_github_repo_push_permission(*, token: str, api_base_url: str, repo: str) -> None:
     """Validates that the token has push permission for the given repository.
 
@@ -91,19 +92,16 @@ def validate_github_repo_push_permission(*, token: str, api_base_url: str, repo:
         can_push = client.get_repository_push_permission(repo=repo)
         if not can_push:
             raise ValidationError(
-                "GitHub token does not have push permission to the repository. "
-                f"repo={repo}"
+                "GitHub token does not have push permission to the repository. " f"repo={repo}"
             )
     except GitHubApiError as exc:
         if exc.status_code == 401:
             raise ValidationError(
-                "GitHub token is invalid or expired for repository access. "
-                f"repo={repo}"
+                "GitHub token is invalid or expired for repository access. " f"repo={repo}"
             ) from exc
         if exc.status_code in {403, 404}:
             raise ValidationError(
-                "GitHub token cannot access the repository or lacks permissions. "
-                f"repo={repo}"
+                "GitHub token cannot access the repository or lacks permissions. " f"repo={repo}"
             ) from exc
         raise ValidationError(
             f"GitHub API error while checking repository permission: status={exc.status_code}"
@@ -134,13 +132,11 @@ def validate_github_git_remote_access(*, token: str, repo: str) -> None:
         stderr = (exc.stderr or "").lower()
         if "invalid credentials" in stderr or "authentication failed" in stderr:
             raise ValidationError(
-                "GitHub token authentication failed for Git HTTPS operations. "
-                f"repo={repo}"
+                "GitHub token authentication failed for Git HTTPS operations. " f"repo={repo}"
             ) from exc
         if "permission" in stderr or "denied" in stderr or "403" in stderr:
             raise ValidationError(
-                "GitHub token lacks permission for Git HTTPS operations. "
-                f"repo={repo}"
+                "GitHub token lacks permission for Git HTTPS operations. " f"repo={repo}"
             ) from exc
         raise ValidationError(f"Git HTTPS validation failed. repo={repo}") from exc
 
@@ -169,7 +165,8 @@ def validate_llm_configuration(*, settings: AppSettings) -> None:
             model_name = parts[1]
         else:
             raise ValidationError(
-                f"LLM_MODEL format is invalid. Expected 'provider/model' (e.g., 'openai/gpt-4'), got: {llm_model}"
+                "LLM_MODEL format is invalid. Expected 'provider/model' "
+                f"(e.g., 'openai/gpt-4'), got: {llm_model}"
             )
     elif openai_model:
         # Fallback to OpenAI if OPENAI_MODEL is set
@@ -201,8 +198,7 @@ def validate_llm_configuration(*, settings: AppSettings) -> None:
             )
     else:
         raise ValidationError(
-            f"Unsupported LLM provider: {model_provider}. "
-            "Supported providers are: openai, gemini"
+            f"Unsupported LLM provider: {model_provider}. Supported providers are: openai, gemini"
         )
 
 
@@ -269,7 +265,9 @@ def validate_openhands_command(*, command_line: str) -> None:
     Raises:
         ValidationError: If OpenHands command is not runnable.
     """
-    from app.subprocess_utils import CommandRunner  # local import to keep module lightweight
+    from app.integrations.process.subprocess_utils import (
+        CommandRunner,
+    )  # local import to keep module lightweight
 
     runner = CommandRunner()
     # Best-effort: call `--version` to ensure the command exists and can run.
@@ -341,4 +339,5 @@ def validate_all(*, settings: AppSettings) -> None:
     if errors:
         error_message = "Startup validation failed:\n\n" + "\n".join(f"  - {err}" for err in errors)
         raise ValidationError(error_message)
+
 

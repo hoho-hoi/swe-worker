@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.config import AppSettings
+from app.core.config import AppSettings
 
 
 def test_app_settings_can_load_from_dotenv(tmp_path: Path) -> None:

@@ -17,9 +17,9 @@ from pathlib import Path
 
 from pydantic import SecretStr
 
-from app.config import AppSettings
+from app.core.config import AppSettings
 from app.providers.base import Provider, ProviderResult, Task
-from app.subprocess_utils import CommandRunner
+from app.integrations.process.subprocess_utils import CommandRunner
 
 
 @dataclass(frozen=True)

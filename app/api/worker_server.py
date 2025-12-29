@@ -18,19 +18,16 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from app.config import AppSettings
-from app.engineer_loop import EngineerLoop, WorkerEvent
-from app.git_ops import GitOps, GitOpsConfig
-from app.github_client import GitHubClient, GitHubClientConfig
-from app.pr_template import PullRequestBodyRenderer, get_default_template_dir
+from app.core.config import AppSettings
+from app.core.startup_validation import ValidationError, validate_all
+from app.domain.engineer_loop import EngineerLoop, WorkerEvent
+from app.integrations.git.git_ops import GitOps, GitOpsConfig
+from app.integrations.github.github_client import GitHubClient, GitHubClientConfig
 from app.providers.noop import NoOpProvider
 from app.providers.openhands import OpenHandsProvider, OpenHandsProviderConfig
-from app.startup_validation import (
-    ValidationError,
-    validate_all,
-)
-from app.state_store import StateStore
-from app.work_paths import detect_default_work_root, get_work_paths
+from app.rendering.pr_template import PullRequestBodyRenderer, get_default_template_dir
+from app.runtime.state_store import StateStore
+from app.runtime.work_paths import detect_default_work_root, get_work_paths
 
 
 class EventPayload(BaseModel):
@@ -311,3 +308,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

@@ -33,5 +33,5 @@ EXPOSE 8000
 # while importing the application code from /app.
 ENV PYTHONPATH=/app
 WORKDIR /work
-CMD ["/app/.venv/bin/python", "-m", "app.worker_server"]
+CMD ["/app/.venv/bin/python", "-m", "app.api.worker_server"]
 

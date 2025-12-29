@@ -14,7 +14,7 @@ import base64
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.subprocess_utils import CommandResult, CommandRunner
+from app.integrations.process.subprocess_utils import CommandResult, CommandRunner
 
 
 class GitCommandError(RuntimeError):
@@ -310,3 +310,5 @@ class GitOps:
     def _format_command_for_display(args: list[str]) -> str:
         # Keep it readable and safe for logs/comments.
         return " ".join(args)
+
+

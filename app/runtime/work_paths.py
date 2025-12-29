@@ -71,3 +71,5 @@ def detect_default_work_root() -> Path:
     if Path("/.dockerenv").exists() or os.environ.get("CI") == "true":
         return Path("/work")
     return (Path.cwd() / "work").resolve()
+
+

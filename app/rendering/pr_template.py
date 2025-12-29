@@ -47,3 +47,5 @@ def get_default_template_dir() -> str:
     """Returns the default template directory path."""
 
     return str(Path(__file__).parent / "templates")
+
+

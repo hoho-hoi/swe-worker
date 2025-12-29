@@ -6,18 +6,18 @@ in a background thread by the HTTP server.
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from app.git_ops import GitCommandError, GitOps
-from app.github_client import GitHubApiError, GitHubClient
-from app.pr_template import PullRequestBodyInput, PullRequestBodyRenderer
+from app.integrations.git.git_ops import GitCommandError, GitOps
+from app.integrations.github.github_client import GitHubApiError, GitHubClient
 from app.providers.base import Provider, Task
-from app.state_store import StateStore, WorkerState
+from app.rendering.pr_template import PullRequestBodyInput, PullRequestBodyRenderer
+from app.runtime.state_store import StateStore, WorkerState
 
 
 @dataclass(frozen=True)
@@ -347,7 +347,9 @@ class EngineerLoop:
         if not self._verify_commands:
             return None
         # Verification is operator-controlled; run via bash for convenience.
-        from app.subprocess_utils import CommandRunner  # local import to keep module sync
+        from app.integrations.process.subprocess_utils import (
+            CommandRunner,
+        )  # local import to keep module sync
 
         runner = CommandRunner()
         lines: list[str] = []
@@ -458,3 +460,5 @@ class EngineerLoop:
             os.replace(tmp_path, out_path)
         except Exception:  # noqa: BLE001
             return
+
+
