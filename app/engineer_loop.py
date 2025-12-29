@@ -6,6 +6,7 @@ in a background thread by the HTTP server.
 
 from __future__ import annotations
 
+import logging
 import json
 import os
 from collections.abc import Callable
@@ -43,6 +44,8 @@ class StopRequestedError(RuntimeError):
 
 class EngineerLoop:
     """Coordinates fetching context, running provider, and creating/updating PR."""
+
+    _logger = logging.getLogger(__name__)
 
     _CONSTRAINTS_MARKDOWN = (
         "## Constraints\n"
@@ -93,6 +96,14 @@ class EngineerLoop:
 
         repo, issue_number, base_branch = self._resolve_context(event)
         branch = f"agent/issue-{issue_number}"
+        self._logger.info(
+            "run started: type=%s repo=%s issue=%s base=%s branch=%s",
+            event.type,
+            repo,
+            issue_number,
+            base_branch,
+            branch,
+        )
 
         state = self._state_store.load_or_initialize(
             repo=repo,
@@ -107,18 +118,33 @@ class EngineerLoop:
 
         try:
             raise_if_stopped()
+            self._logger.info("fetching issue: repo=%s issue=%s", repo, issue_number)
             issue = self._github_client.get_issue(repo=repo, issue_number=issue_number)
             raise_if_stopped()
+            self._logger.info(
+                "listing new issue comments: repo=%s issue=%s last_seen_comment_id=%s",
+                repo,
+                issue_number,
+                state.last_seen_comment_id,
+            )
             comments = self._github_client.list_issue_comments_since(
                 repo=repo,
                 issue_number=issue_number,
                 last_seen_comment_id=state.last_seen_comment_id,
             )
             max_comment_id = max((c.id for c in comments), default=state.last_seen_comment_id)
+            self._logger.info(
+                "loaded comments: repo=%s issue=%s new_comments=%s max_comment_id=%s",
+                repo,
+                issue_number,
+                len(comments),
+                max_comment_id,
+            )
             comments_markdown = "\n\n".join(
                 f"### Comment {c.id}\n\n{(c.body or '').strip()}" for c in comments
             ).strip()
 
+            self._logger.info("ensuring repo clone: repo=%s base=%s", repo, base_branch)
             self._git_ops.clone_if_needed(
                 repo=repo,
                 dest_dir=str(self._state_store.paths.repo_dir),
@@ -126,6 +152,7 @@ class EngineerLoop:
                 github_token=self._github_token,
             )
             raise_if_stopped()
+            self._logger.info("checking out branch: base=%s branch=%s", base_branch, branch)
             self._git_ops.ensure_branch_checked_out(
                 repo_dir=str(self._state_store.paths.repo_dir),
                 base_branch=base_branch,
@@ -142,28 +169,51 @@ class EngineerLoop:
                 comments_markdown=comments_markdown,
                 constraints_markdown=self._CONSTRAINTS_MARKDOWN,
             )
+            self._logger.info("running provider: repo=%s issue=%s", repo, issue_number)
             provider_result = self._provider.run(
                 task=provider_task,
                 repo_path=str(self._state_store.paths.repo_dir),
             )
+            self._logger.info(
+                "provider finished: success=%s summary=%s",
+                provider_result.success,
+                provider_result.summary,
+            )
+            if not provider_result.success:
+                # Provider failure is a hard failure: do not continue with git/PR creation.
+                excerpt = (provider_result.log_excerpt or "").strip()
+                if excerpt:
+                    # Keep it readable in logs and safe in issue comments.
+                    if len(excerpt) > 2000:
+                        excerpt = excerpt[-2000:]
+                    raise RuntimeError(
+                        "Provider failed.\n\n"
+                        f"Summary:\n{provider_result.summary}\n\n"
+                        f"Log excerpt:\n{excerpt}"
+                    )
+                raise RuntimeError(f"Provider failed: {provider_result.summary}")
             raise_if_stopped()
 
+            self._logger.info("running verify commands: count=%s", len(self._verify_commands))
             verify_output = self._run_verify_commands_or_raise(
                 repo_dir=str(self._state_store.paths.repo_dir),
             )
             raise_if_stopped()
 
+            self._logger.info("committing changes (if any)")
             committed_sha = self._git_ops.commit_all_if_dirty(
                 repo_dir=str(self._state_store.paths.repo_dir),
                 message=self._build_commit_message(
                     issue_number=issue_number, issue_title=issue.title
                 ),
             )
+            self._logger.info("commit result: committed_sha=%s", committed_sha)
             is_first_pr_run = state.pr_number is None
             # Ensure the head branch exists on GitHub before creating a PR.
             # When there is no diff, `commit_all_if_dirty` returns None and we would otherwise
             # attempt to create a PR against a non-existent remote branch (422 invalid head).
             if committed_sha is not None or is_first_pr_run:
+                self._logger.info("pushing branch: branch=%s", branch)
                 self._git_ops.push_branch(
                     repo_dir=str(self._state_store.paths.repo_dir),
                     branch=branch,
@@ -172,6 +222,7 @@ class EngineerLoop:
 
             head_sha = self._git_ops.get_head_sha(repo_dir=str(self._state_store.paths.repo_dir))
             state.last_head_sha = head_sha
+            self._logger.info("head sha updated: %s", head_sha)
 
             pr_number = state.pr_number
             pr_url: str | None = None
@@ -183,6 +234,7 @@ class EngineerLoop:
                 )
             )
             if pr_number is None:
+                self._logger.info("creating pull request: base=%s head=%s", base_branch, branch)
                 created = self._github_client.create_pull_request(
                     repo=repo,
                     title=self._build_pr_title(issue_number=issue_number, issue_title=issue.title),
@@ -193,11 +245,13 @@ class EngineerLoop:
                 pr_number = created.number
                 pr_url = created.html_url
                 state.pr_number = pr_number
+                self._logger.info("pull request created: pr_number=%s pr_url=%s", pr_number, pr_url)
             else:
                 # Avoid overwriting human edits: only enforce required closes line.
                 existing = self._github_client.get_pull_request(repo=repo, pr_number=pr_number)
                 required_line = f"Closes #{issue_number}"
                 if (existing.body or "").find(required_line) < 0:
+                    self._logger.info("updating pull request body: pr_number=%s", pr_number)
                     self._github_client.update_pull_request_body(
                         repo=repo,
                         pr_number=pr_number,
@@ -229,14 +283,35 @@ class EngineerLoop:
                 issue_number=issue_number,
                 body=comment_body,
             )
+            self._logger.info(
+                "run completed: success=%s pr_number=%s",
+                provider_result.success,
+                state.pr_number,
+            )
             return RunResult(success=provider_result.success, message=provider_result.summary)
         except StopRequestedError as exc:
+            self._logger.warning(
+                "run cancelled: repo=%s issue=%s branch=%s error=%s",
+                repo,
+                issue_number,
+                branch,
+                exc,
+            )
             state.last_run_status = "failed"
             state.last_error = str(exc)
             self._state_store.save(state)
             self._write_result_file(state=state, pr_url=None)
             return RunResult(success=False, message=str(exc))
         except (GitHubApiError, GitCommandError) as exc:
+            # EngineerLoop handles the error, but we still log details so operators can debug
+            # without having to check issue comments.
+            self._logger.exception(
+                "run failed: repo=%s issue=%s branch=%s error=%s",
+                repo,
+                issue_number,
+                branch,
+                exc,
+            )
             state.last_run_status = "failed"
             state.last_error = str(exc)
             self._state_store.save(state)
@@ -244,6 +319,13 @@ class EngineerLoop:
             self._safe_report_failure(repo=repo, issue_number=issue_number, error=str(exc))
             return RunResult(success=False, message=str(exc))
         except Exception as exc:  # noqa: BLE001
+            self._logger.exception(
+                "run failed (unhandled): repo=%s issue=%s branch=%s error=%s",
+                repo,
+                issue_number,
+                branch,
+                exc,
+            )
             state.last_run_status = "failed"
             state.last_error = f"Unhandled error: {exc}"
             self._state_store.save(state)
@@ -337,13 +419,20 @@ class EngineerLoop:
 
     def _safe_report_failure(self, *, repo: str, issue_number: int, error: str) -> None:
         try:
+            self._logger.info("posting failure comment to issue: repo=%s issue=%s", repo, issue_number)
             self._github_client.create_issue_comment(
                 repo=repo,
                 issue_number=issue_number,
                 body=f"❌ Engineer Bot run failed.\n\nError:\n{error}\n",
             )
+            self._logger.info("failure comment posted: repo=%s issue=%s", repo, issue_number)
         except Exception:  # noqa: BLE001
             # Avoid masking original failure.
+            self._logger.exception(
+                "failed to post failure comment: repo=%s issue=%s",
+                repo,
+                issue_number,
+            )
             return
 
     def _write_result_file(self, *, state: WorkerState, pr_url: str | None) -> None:

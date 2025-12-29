@@ -68,7 +68,13 @@ def test_openhands_provider_parses_command_line(tmp_path: Path) -> None:
         repo_path=str(tmp_path),
     )
     assert result.success is True
-    assert runner.last_args == ["uv", "run", "openhands"]
+    assert runner.last_args is not None
+    assert runner.last_args[:3] == ["uv", "run", "openhands"]
+    assert "--headless" in runner.last_args
+    assert "--always-approve" in runner.last_args
+    assert "--exit-without-confirmation" in runner.last_args
+    # Task file should be passed via --file <path>
+    assert "--file" in runner.last_args
 
 
 def test_openhands_provider_writes_agent_settings_when_llm_model_is_set(tmp_path: Path) -> None:

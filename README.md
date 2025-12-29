@@ -102,6 +102,20 @@ docker run --rm -p 8000:8000 \
 
 ## トラブルシュート
 
+### `git push failed: Authentication or permission error`
+
+403エラーやPermission deniedエラーが発生する場合、以下の点を確認してください：
+
+1. **GitHub Tokenの権限**: `GITHUB_TOKEN`（または`ENGINEER_PAT_KEY`）が以下のスコープを持っていることを確認：
+   - `repo` スコープ（リポジトリへの読み書きアクセス）
+   - プライベートリポジトリの場合は、該当リポジトリへのアクセス権限
+
+2. **Tokenの形式**: Fine-grained Personal Access TokenまたはClassic Personal Access Tokenのいずれも使用可能です。
+
+3. **リポジトリへのアクセス権限**: 使用しているGitHubアカウント（またはBotアカウント）が対象リポジトリへの書き込み権限を持っていることを確認してください。
+
+4. **Tokenの有効性**: Tokenが有効期限内であること、また失効していないことを確認してください。
+
 ### `OPENAI_API_KEY を入れたとき、どのモデルが使われる？`
 
 このWorkerは `LLM_MODEL`（推奨: `provider/<model>`）から **OpenHandsの設定ファイル（`agent_settings.json`）を生成**し、その `llm.model` が使われます。

@@ -82,6 +82,39 @@ class GitHubClient:
 
         self._client.close()
 
+    def verify_authentication(self) -> None:
+        """Verifies that the token is valid by calling /user endpoint.
+
+        Raises:
+            GitHubApiError: If authentication fails.
+        """
+        resp = self._client.get("/user")
+        self._raise_for_error(resp)
+
+    def get_repository_push_permission(self, *, repo: str) -> bool:
+        """Returns whether the authenticated token has push permission to the repository.
+
+        Args:
+            repo: Repository in "owner/repo" format.
+
+        Returns:
+            True if token has push permission, otherwise False.
+
+        Raises:
+            GitHubApiError: If API call fails (e.g., 401/403/404).
+        """
+
+        class _Permissions(BaseModel):
+            push: bool = Field(default=False)
+
+        class _Repository(BaseModel):
+            permissions: _Permissions | None = Field(default=None)
+
+        resp = self._client.get(f"/repos/{repo}")
+        self._raise_for_error(resp)
+        parsed = _Repository.model_validate(resp.json())
+        return bool(parsed.permissions and parsed.permissions.push)
+
     def get_issue(self, *, repo: str, issue_number: int) -> Issue:
         """Fetches issue details."""
 

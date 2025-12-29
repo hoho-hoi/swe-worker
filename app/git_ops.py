@@ -88,8 +88,15 @@ class GitOps:
             ],
         )
         if result.exit_code != 0:
+            # Provide more helpful error message for authentication failures
+            error_msg = "git clone failed"
+            if "403" in result.stderr or "Permission" in result.stderr or "denied" in result.stderr:
+                error_msg = (
+                    "git clone failed: Authentication or permission error. "
+                    "Please verify that the GitHub token has 'repo' scope and read access to the repository."
+                )
             raise GitCommandError(
-                message="git clone failed",
+                message=error_msg,
                 command_display=self._format_command_for_display(
                     [
                         "git",
@@ -192,10 +199,59 @@ class GitOps:
             extraheader=extraheader,
         )
         if result.exit_code != 0:
+            # Provide more helpful error message for authentication failures
+            error_msg = "git push failed"
+            if "403" in result.stderr or "Permission" in result.stderr or "denied" in result.stderr:
+                error_msg = (
+                    "git push failed: Authentication or permission error. "
+                    "Please verify that the GitHub token has 'repo' scope and write access to the repository."
+                )
             raise GitCommandError(
-                message="git push failed",
+                message=error_msg,
                 command_display=self._format_command_for_display(
                     ["git", "-C", repo_dir, "push", "-u", "origin", branch]
+                ),
+                exit_code=result.exit_code,
+                stderr=result.stderr,
+            )
+
+    def verify_remote_access(self, *, repo: str, github_token: str) -> None:
+        """Verifies the token can authenticate to the repository via Git HTTPS.
+
+        This is a lightweight check used for validation before running a full worker loop.
+
+        Args:
+            repo: Repository in "owner/repo" format.
+            github_token: GitHub token used for authentication.
+
+        Raises:
+            GitCommandError: If remote access fails.
+        """
+        repo_url = self._repo_https_url(repo)
+        extraheader = self._github_extraheader_value(github_token)
+        # `ls-remote` is a cheap way to validate Git HTTPS auth without cloning.
+        result = self._runner.run(
+            args=[
+                "git",
+                "-c",
+                f"http.https://github.com/.extraheader={extraheader}",
+                "ls-remote",
+                repo_url,
+                "HEAD",
+            ]
+        )
+        if result.exit_code != 0:
+            raise GitCommandError(
+                message="git ls-remote failed",
+                command_display=self._format_command_for_display(
+                    [
+                        "git",
+                        "-c",
+                        "http.https://github.com/.extraheader=<REDACTED>",
+                        "ls-remote",
+                        repo_url,
+                        "HEAD",
+                    ]
                 ),
                 exit_code=result.exit_code,
                 stderr=result.stderr,
@@ -231,10 +287,14 @@ class GitOps:
 
     @staticmethod
     def _github_extraheader_value(token: str) -> str:
-        # GitHub recommends basic auth with username `x-access-token` and the token as password.
-        raw = f"x-access-token:{token}".encode()
+        """Builds `http.*.extraHeader` value for GitHub HTTPS auth.
+
+        GitHub recommends basic auth with username `x-access-token` and the token as password.
+        The `http.extraHeader` config expects a full HTTP header line.
+        """
+        raw = f"x-access-token:{token}".encode("utf-8")
         b64 = base64.b64encode(raw).decode("ascii")
-        return f"AUTHORIZATION: basic {b64}"
+        return f"Authorization: Basic {b64}"
 
     @staticmethod
     def _redact_command_args_for_display(args: list[str]) -> list[str]:

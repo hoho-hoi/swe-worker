@@ -7,13 +7,17 @@ apply changes directly to the working tree.
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from pydantic import SecretStr
 
+from app.config import AppSettings
 from app.providers.base import Provider, ProviderResult, Task
 from app.subprocess_utils import CommandRunner
 
@@ -28,6 +32,8 @@ class OpenHandsProviderConfig:
 
 class OpenHandsProvider(Provider):
     """Provider that invokes OpenHands via CLI."""
+
+    _logger = logging.getLogger(__name__)
 
     def __init__(
         self,
@@ -60,11 +66,36 @@ class OpenHandsProvider(Provider):
         if settings_error is not None:
             return ProviderResult(success=False, summary=settings_error, log_excerpt=None)
 
+        command_args = self._build_effective_command_args(task_file=task_file)
+        self._logger.info(
+            "OpenHands started: command=%s repo_dir=%s",
+            " ".join(command_args),
+            str(repo_dir),
+        )
+        start_time = time.monotonic()
+        stop_event = threading.Event()
+
+        def log_heartbeat() -> None:
+            # Periodic heartbeat so operators can tell OpenHands is still running.
+            while not stop_event.wait(30.0):
+                elapsed = int(time.monotonic() - start_time)
+                self._logger.info("OpenHands still running: elapsed_seconds=%s", elapsed)
+
+        timeout_seconds: int | None = None
+        # Read default timeout from environment via AppSettings (same .env loader/normalizer).
         try:
+            timeout_seconds = int(AppSettings().openhands_timeout_seconds)
+        except Exception:  # noqa: BLE001
+            timeout_seconds = None
+
+        try:
+            heartbeat_thread = threading.Thread(target=log_heartbeat, daemon=True)
+            heartbeat_thread.start()
             result = self._runner.run(
-                args=list(self._command_args),
+                args=command_args,
                 cwd=repo_dir,
                 env=env,
+                timeout_seconds=timeout_seconds,
             )
         except FileNotFoundError:
             return ProviderResult(
@@ -76,15 +107,35 @@ class OpenHandsProvider(Provider):
                 ),
                 log_excerpt=None,
             )
+        except TimeoutError:
+            return ProviderResult(
+                success=False,
+                summary=(
+                    "OpenHands command timed out. "
+                    "Increase OPENHANDS_TIMEOUT_SECONDS if needed."
+                ),
+                log_excerpt=None,
+            )
+        finally:
+            stop_event.set()
+            elapsed = int(time.monotonic() - start_time)
+            self._logger.info("OpenHands finished: elapsed_seconds=%s", elapsed)
         success = result.exit_code == 0
         log_excerpt = (result.stdout + "\n" + result.stderr).strip()
         if len(log_excerpt) > 4000:
             log_excerpt = log_excerpt[-4000:]
 
         if not success:
+            if log_excerpt:
+                # Surface enough context to debug without having to open issue comments.
+                self._logger.error(
+                    "OpenHands command failed: exit_code=%s excerpt_tail=%s",
+                    result.exit_code,
+                    log_excerpt[-800:],
+                )
             return ProviderResult(
                 success=False,
-                summary="OpenHands command failed.",
+                summary=f"OpenHands command failed (exit_code={result.exit_code}).",
                 log_excerpt=log_excerpt or None,
             )
         return ProviderResult(
@@ -109,6 +160,41 @@ class OpenHandsProvider(Provider):
         args = tuple(shlex.split(command_line))
         if not args:
             raise ValueError("OPENHANDS_COMMAND must not be empty.")
+        return args
+
+    def _build_effective_command_args(self, *, task_file: Path) -> list[str]:
+        """Builds an OpenHands command line suitable for non-interactive execution.
+
+        OpenHands CLI defaults to an interactive TUI with manual approvals. In a worker
+        environment we want headless, non-interactive execution seeded by the task file.
+
+        Args:
+            task_file: Path to the rendered task file.
+
+        Returns:
+            Command arguments for subprocess execution.
+        """
+        args = list(self._command_args)
+
+        has_file = ("--file" in args) or ("-f" in args)
+        has_task = ("--task" in args) or ("-t" in args)
+        has_headless = "--headless" in args
+        has_always_approve = "--always-approve" in args
+        has_llm_approve = "--llm-approve" in args
+        has_exit_without_confirmation = "--exit-without-confirmation" in args
+
+        # Ensure the initial task is provided.
+        if not has_file and not has_task:
+            args.extend(["--file", str(task_file)])
+
+        # Ensure non-interactive execution.
+        if not has_headless:
+            args.append("--headless")
+        if not (has_always_approve or has_llm_approve):
+            args.append("--always-approve")
+        if not has_exit_without_confirmation:
+            args.append("--exit-without-confirmation")
+
         return args
 
     @staticmethod

@@ -25,6 +25,10 @@ from app.github_client import GitHubClient, GitHubClientConfig
 from app.pr_template import PullRequestBodyRenderer, get_default_template_dir
 from app.providers.noop import NoOpProvider
 from app.providers.openhands import OpenHandsProvider, OpenHandsProviderConfig
+from app.startup_validation import (
+    ValidationError,
+    validate_all,
+)
 from app.state_store import StateStore
 from app.work_paths import detect_default_work_root, get_work_paths
 
@@ -79,6 +83,12 @@ class WorkerRuntime:
             ) from exc
         self._openhands_home_dir = self._state_store.paths.state_dir / "openhands_home"
         self._openhands_home_dir.mkdir(parents=True, exist_ok=True)
+
+        # Validate all required credentials and configuration before proceeding
+        try:
+            validate_all(settings=self._settings)
+        except ValidationError as exc:
+            raise RuntimeError(str(exc)) from exc
 
         self._github_client = self._build_github_client()
         self._git_ops = GitOps(
@@ -144,7 +154,14 @@ class WorkerRuntime:
             github_token=token,
             verify_commands=verify_commands,
         )
-        loop.run(event=event, stop_checker=self.stop_checker)
+        logging.info("event execution started: type=%s", event.type)
+        result = loop.run(event=event, stop_checker=self.stop_checker)
+        logging.info(
+            "event execution finished: type=%s success=%s message=%s",
+            event.type,
+            result.success,
+            result.message,
+        )
 
     def _build_github_client(self) -> GitHubClient:
         token = self._get_github_token()
@@ -210,7 +227,12 @@ class WorkerRuntime:
 def create_app(*, work_root: str | None = None) -> FastAPI:
     """Creates FastAPI app."""
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+    # httpx INFO logs are noisy and make it hard to see worker progress.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     settings = AppSettings()
     runtime = WorkerRuntime(settings=settings, work_root=work_root)
 

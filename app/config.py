@@ -37,6 +37,7 @@ class AppSettings(BaseSettings):
 
     # Provider
     openhands_command: str | None = None
+    openhands_timeout_seconds: int = 3600
     # Common LLM env vars passed through to OpenHands (if set)
     openai_api_key: str | None = None
     openai_base_url: str | None = None
