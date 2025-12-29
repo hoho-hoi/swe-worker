@@ -25,6 +25,11 @@ uv sync --group dev
 GITHUB_TOKEN=<YOUR_GITHUB_TOKEN>
 # ENGINEER_PAT_KEY=<YOUR_GITHUB_TOKEN>   # GITHUB_TOKENの代替（どちらか必須）
 
+# NOTE: Docker の `--env-file` は引用符を剥がさないため、値はクォートしないこと。
+
+# NOTE: WORK_ROOT を未指定の場合、ローカルは `./work`、コンテナは `/work` を使います。
+#  明示したい場合は `WORK_ROOT=...` を指定してください。
+
 # OpenAI（推奨: provider付き）
 OPENAI_API_KEY=<YOUR_OPENAI_API_KEY>
 LLM_MODEL=openai/<model>

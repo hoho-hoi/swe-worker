@@ -180,3 +180,47 @@ def test_engineer_loop_rerun_reuses_existing_pr(tmp_path: Path) -> None:
     assert result.success is True
     assert gh.created_prs == []
     assert gh.updated_pr_bodies == []
+
+
+def test_engineer_loop_creates_pr_even_when_no_changes(tmp_path: Path) -> None:
+    store = StateStore(paths=get_work_paths(work_root=tmp_path))
+    gh = _FakeGitHubClient(
+        issue=Issue(number=123, title="Test issue", body="Body"),
+        comments=[],
+        created_prs=[],
+        issue_comments=[],
+        updated_pr_bodies=[],
+        existing_pr_body="",
+    )
+    git_ops = _FakeGitOps(commit_sha=None, head_sha="head1", pushed_branches=[])
+    provider = _FakeProvider(result=ProviderResult(success=True, summary="done", log_excerpt=None))
+
+    template_dir = tmp_path / "templates"
+    template_dir.mkdir(parents=True)
+    (template_dir / "pr_body.md").write_text(
+        (
+            "Summary\n{{ summary }}\n\n"
+            "How to test\n{{ how_to_test }}\n\n"
+            "Tracking\nCloses #{{ issue_number }}\n"
+        ),
+        encoding="utf-8",
+    )
+    renderer = PullRequestBodyRenderer(template_dir=str(template_dir))
+
+    loop = EngineerLoop(
+        state_store=store,
+        github_client=gh,  # type: ignore[arg-type]
+        git_ops=git_ops,  # type: ignore[arg-type]
+        provider=provider,
+        pr_body_renderer=renderer,
+        github_token="token",
+        verify_commands=[],
+    )
+
+    result = loop.run(
+        event=WorkerEvent(type="start", repo="owner/repo", issue_number=123, base_branch="main")
+    )
+    assert result.success is True
+    assert gh.created_prs
+    # First PR run must push the branch to ensure the head exists.
+    assert git_ops.pushed_branches == ["agent/issue-123"]

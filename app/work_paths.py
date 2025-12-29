@@ -6,6 +6,7 @@ working files live under a single root inside the container.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,9 +42,11 @@ def get_default_work_paths() -> WorkPaths:
 
 
 def get_work_paths(*, work_root: str | Path) -> WorkPaths:
-    """Returns work paths for a given root (used for tests)."""
+    """Returns work paths for a given root."""
 
-    root = Path(work_root)
+    root = Path(work_root).expanduser()
+    if not root.is_absolute():
+        root = (Path.cwd() / root).resolve()
     repo_dir = root / "repo"
     state_dir = root / "state"
     logs_dir = root / "logs"
@@ -56,3 +59,15 @@ def get_work_paths(*, work_root: str | Path) -> WorkPaths:
         logs_dir=logs_dir,
         out_dir=out_dir,
     )
+
+
+def detect_default_work_root() -> Path:
+    """Detects a sensible default work root.
+
+    - In containers, use `/work`.
+    - On local machines, use `./work` under current working directory.
+    """
+
+    if Path("/.dockerenv").exists() or os.environ.get("CI") == "true":
+        return Path("/work")
+    return (Path.cwd() / "work").resolve()

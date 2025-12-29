@@ -26,7 +26,7 @@ from app.pr_template import PullRequestBodyRenderer, get_default_template_dir
 from app.providers.noop import NoOpProvider
 from app.providers.openhands import OpenHandsProvider, OpenHandsProviderConfig
 from app.state_store import StateStore
-from app.work_paths import get_default_work_paths, get_work_paths
+from app.work_paths import detect_default_work_root, get_work_paths
 
 
 class EventPayload(BaseModel):
@@ -61,13 +61,22 @@ class WorkerRuntime:
         self._queue: asyncio.Queue[WorkerEvent] = asyncio.Queue()
         self._consumer_task: asyncio.Task[None] | None = None
 
-        paths = (
-            get_work_paths(work_root=work_root)
+        resolved_work_root = (
+            work_root
             if work_root is not None
-            else get_default_work_paths()
+            else (self._settings.work_root or str(detect_default_work_root()))
         )
+        paths = get_work_paths(work_root=resolved_work_root)
         self._state_store = StateStore(paths=paths)
-        self._state_store.ensure_directories()
+        try:
+            self._state_store.ensure_directories()
+        except OSError as exc:
+            raise RuntimeError(
+                "Failed to create work directories. "
+                "If you are running locally, set WORK_ROOT to a writable path "
+                "(e.g., WORK_ROOT=./work). "
+                f"work_root={resolved_work_root}"
+            ) from exc
         self._openhands_home_dir = self._state_store.paths.state_dir / "openhands_home"
         self._openhands_home_dir.mkdir(parents=True, exist_ok=True)
 

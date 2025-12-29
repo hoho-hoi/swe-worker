@@ -7,23 +7,31 @@ RUN apt-get update -y \
   && apt-get install -y --no-install-recommends git ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
+RUN pip install --no-cache-dir uv==0.7.2
+
 RUN adduser --disabled-password --gecos "" agent
 RUN mkdir -p /work/repo /work/state /work/logs /work/out \
   && chown -R agent:agent /work
 
 WORKDIR /app
-RUN pip install --no-cache-dir uv==0.7.2
+RUN chown -R agent:agent /app
 
-COPY pyproject.toml /app/pyproject.toml
+USER agent
+
+COPY --chown=agent:agent pyproject.toml /app/pyproject.toml
 # If uv.lock exists, use frozen mode for reproducible builds.
-COPY uv.lock /app/uv.lock
-RUN uv sync --frozen --no-dev
+COPY --chown=agent:agent uv.lock /app/uv.lock
+# Only install runtime dependencies; the project itself is executed from source under /app.
+RUN uv sync --frozen --no-dev --no-install-project
 
-COPY app /app/app
-COPY README.md /app/README.md
+COPY --chown=agent:agent app /app/app
+COPY --chown=agent:agent README.md /app/README.md
 
 EXPOSE 8000
 
-USER agent
-CMD ["uv", "run", "python", "-m", "app.worker_server"]
+# Run the server from /work (consistent with container-local work root),
+# while importing the application code from /app.
+ENV PYTHONPATH=/app
+WORKDIR /work
+CMD ["/app/.venv/bin/python", "-m", "app.worker_server"]
 

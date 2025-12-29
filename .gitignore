@@ -7,6 +7,9 @@ __pycache__/
 # Worker persistence (runtime volume)
 data/
 /data/
+
+# Local work root (WORK_ROOT default)
+work/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

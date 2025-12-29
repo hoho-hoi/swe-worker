@@ -159,7 +159,11 @@ class EngineerLoop:
                     issue_number=issue_number, issue_title=issue.title
                 ),
             )
-            if committed_sha is not None:
+            is_first_pr_run = state.pr_number is None
+            # Ensure the head branch exists on GitHub before creating a PR.
+            # When there is no diff, `commit_all_if_dirty` returns None and we would otherwise
+            # attempt to create a PR against a non-existent remote branch (422 invalid head).
+            if committed_sha is not None or is_first_pr_run:
                 self._git_ops.push_branch(
                     repo_dir=str(self._state_store.paths.repo_dir),
                     branch=branch,
@@ -182,7 +186,7 @@ class EngineerLoop:
                 created = self._github_client.create_pull_request(
                     repo=repo,
                     title=self._build_pr_title(issue_number=issue_number, issue_title=issue.title),
-                    head=branch,
+                    head=f"{repo.split('/')[0]}:{branch}",
                     base=base_branch,
                     body=pr_body,
                 )

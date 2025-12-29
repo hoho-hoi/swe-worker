@@ -20,8 +20,25 @@ from app.subprocess_utils import CommandResult, CommandRunner
 class GitCommandError(RuntimeError):
     """Raised when a git command fails."""
 
-    def __init__(self, *, message: str, stderr: str | None = None) -> None:
-        super().__init__(message)
+    def __init__(
+        self,
+        *,
+        message: str,
+        command_display: str | None = None,
+        exit_code: int | None = None,
+        stderr: str | None = None,
+    ) -> None:
+        parts: list[str] = [message]
+        if command_display:
+            parts.append(f"command={command_display}")
+        if exit_code is not None:
+            parts.append(f"exit_code={exit_code}")
+        if stderr:
+            stderr_text = stderr.strip()
+            if len(stderr_text) > 2000:
+                stderr_text = stderr_text[-2000:]
+            parts.append(f"stderr={stderr_text}")
+        super().__init__(" | ".join(parts))
         self.stderr = stderr
 
 
@@ -71,7 +88,24 @@ class GitOps:
             ],
         )
         if result.exit_code != 0:
-            raise GitCommandError(message="git clone failed", stderr=result.stderr)
+            raise GitCommandError(
+                message="git clone failed",
+                command_display=self._format_command_for_display(
+                    [
+                        "git",
+                        "-c",
+                        "http.https://github.com/.extraheader=<REDACTED>",
+                        "clone",
+                        "--branch",
+                        base_branch,
+                        "--single-branch",
+                        repo_url,
+                        str(dest),
+                    ]
+                ),
+                exit_code=result.exit_code,
+                stderr=result.stderr,
+            )
 
     def ensure_branch_checked_out(
         self,
@@ -158,7 +192,14 @@ class GitOps:
             extraheader=extraheader,
         )
         if result.exit_code != 0:
-            raise GitCommandError(message="git push failed", stderr=result.stderr)
+            raise GitCommandError(
+                message="git push failed",
+                command_display=self._format_command_for_display(
+                    ["git", "-C", repo_dir, "push", "-u", "origin", branch]
+                ),
+                exit_code=result.exit_code,
+                stderr=result.stderr,
+            )
 
     def _run_git(
         self,
@@ -174,7 +215,14 @@ class GitOps:
         cmd.extend(args)
         result = self._runner.run(args=cmd)
         if (not allow_failure) and result.exit_code != 0:
-            raise GitCommandError(message="git command failed", stderr=result.stderr)
+            raise GitCommandError(
+                message="git command failed",
+                command_display=self._format_command_for_display(
+                    self._redact_command_args_for_display(cmd)
+                ),
+                exit_code=result.exit_code,
+                stderr=result.stderr,
+            )
         return result
 
     @staticmethod
@@ -187,3 +235,18 @@ class GitOps:
         raw = f"x-access-token:{token}".encode()
         b64 = base64.b64encode(raw).decode("ascii")
         return f"AUTHORIZATION: basic {b64}"
+
+    @staticmethod
+    def _redact_command_args_for_display(args: list[str]) -> list[str]:
+        redacted: list[str] = []
+        for arg in args:
+            if "http.https://github.com/.extraheader=" in arg:
+                redacted.append("http.https://github.com/.extraheader=<REDACTED>")
+            else:
+                redacted.append(arg)
+        return redacted
+
+    @staticmethod
+    def _format_command_for_display(args: list[str]) -> str:
+        # Keep it readable and safe for logs/comments.
+        return " ".join(args)
