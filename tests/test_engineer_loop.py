@@ -4,9 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.domain.engineer_loop import EngineerLoop, WorkerEvent
-from app.integrations.github.github_client import Issue, IssueComment, PullRequest, PullRequestCreated
-from app.rendering.pr_template import PullRequestBodyRenderer
+from app.integrations.github.github_client import (
+    Issue,
+    IssueComment,
+    PullRequest,
+    PullRequestCreated,
+)
 from app.providers.base import Provider, ProviderResult, Task
+from app.rendering.pr_template import PullRequestBodyRenderer
 from app.runtime.state_store import StateStore
 from app.runtime.work_paths import get_work_paths
 

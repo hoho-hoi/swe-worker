@@ -93,7 +93,8 @@ class GitOps:
             if "403" in result.stderr or "Permission" in result.stderr or "denied" in result.stderr:
                 error_msg = (
                     "git clone failed: Authentication or permission error. "
-                    "Please verify that the GitHub token has 'repo' scope and read access to the repository."
+                    "Please verify that the GitHub token has 'repo' scope and read access "
+                    "to the repository."
                 )
             raise GitCommandError(
                 message=error_msg,
@@ -204,7 +205,8 @@ class GitOps:
             if "403" in result.stderr or "Permission" in result.stderr or "denied" in result.stderr:
                 error_msg = (
                     "git push failed: Authentication or permission error. "
-                    "Please verify that the GitHub token has 'repo' scope and write access to the repository."
+                    "Please verify that the GitHub token has 'repo' scope and write access "
+                    "to the repository."
                 )
             raise GitCommandError(
                 message=error_msg,
@@ -292,7 +294,7 @@ class GitOps:
         GitHub recommends basic auth with username `x-access-token` and the token as password.
         The `http.extraHeader` config expects a full HTTP header line.
         """
-        raw = f"x-access-token:{token}".encode("utf-8")
+        raw = f"x-access-token:{token}".encode()
         b64 = base64.b64encode(raw).decode("ascii")
         return f"Authorization: Basic {b64}"
 
@@ -310,5 +312,3 @@ class GitOps:
     def _format_command_for_display(args: list[str]) -> str:
         # Keep it readable and safe for logs/comments.
         return " ".join(args)
-
-

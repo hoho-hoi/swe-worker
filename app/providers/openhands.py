@@ -18,8 +18,8 @@ from pathlib import Path
 from pydantic import SecretStr
 
 from app.core.config import AppSettings
-from app.providers.base import Provider, ProviderResult, Task
 from app.integrations.process.subprocess_utils import CommandRunner
+from app.providers.base import Provider, ProviderResult, Task
 
 
 @dataclass(frozen=True)
@@ -111,8 +111,7 @@ class OpenHandsProvider(Provider):
             return ProviderResult(
                 success=False,
                 summary=(
-                    "OpenHands command timed out. "
-                    "Increase OPENHANDS_TIMEOUT_SECONDS if needed."
+                    "OpenHands command timed out. Increase OPENHANDS_TIMEOUT_SECONDS if needed."
                 ),
                 log_excerpt=None,
             )

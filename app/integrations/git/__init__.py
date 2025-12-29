@@ -1,3 +1,1 @@
 """Git integration package."""
-
-

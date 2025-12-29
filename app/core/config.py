@@ -85,5 +85,3 @@ class AppSettings(BaseSettings):
         if len(text) >= 2 and ((text[0] == text[-1] == '"') or (text[0] == text[-1] == "'")):
             text = text[1:-1].strip()
         return text or None
-
-

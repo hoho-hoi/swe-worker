@@ -44,8 +44,7 @@ def validate_github_token(*, token: str, api_base_url: str) -> None:
             ) from exc
         if exc.status_code == 403:
             raise ValidationError(
-                "GitHub token lacks required permissions. "
-                "Please ensure the token has 'repo' scope."
+                "GitHub token lacks required permissions. Please ensure the token has 'repo' scope."
             ) from exc
         raise ValidationError(
             f"GitHub API error: status={exc.status_code}, message={exc.message}"
@@ -92,16 +91,16 @@ def validate_github_repo_push_permission(*, token: str, api_base_url: str, repo:
         can_push = client.get_repository_push_permission(repo=repo)
         if not can_push:
             raise ValidationError(
-                "GitHub token does not have push permission to the repository. " f"repo={repo}"
+                f"GitHub token does not have push permission to the repository. repo={repo}"
             )
     except GitHubApiError as exc:
         if exc.status_code == 401:
             raise ValidationError(
-                "GitHub token is invalid or expired for repository access. " f"repo={repo}"
+                f"GitHub token is invalid or expired for repository access. repo={repo}"
             ) from exc
         if exc.status_code in {403, 404}:
             raise ValidationError(
-                "GitHub token cannot access the repository or lacks permissions. " f"repo={repo}"
+                f"GitHub token cannot access the repository or lacks permissions. repo={repo}"
             ) from exc
         raise ValidationError(
             f"GitHub API error while checking repository permission: status={exc.status_code}"
@@ -132,11 +131,11 @@ def validate_github_git_remote_access(*, token: str, repo: str) -> None:
         stderr = (exc.stderr or "").lower()
         if "invalid credentials" in stderr or "authentication failed" in stderr:
             raise ValidationError(
-                "GitHub token authentication failed for Git HTTPS operations. " f"repo={repo}"
+                f"GitHub token authentication failed for Git HTTPS operations. repo={repo}"
             ) from exc
         if "permission" in stderr or "denied" in stderr or "403" in stderr:
             raise ValidationError(
-                "GitHub token lacks permission for Git HTTPS operations. " f"repo={repo}"
+                f"GitHub token lacks permission for Git HTTPS operations. repo={repo}"
             ) from exc
         raise ValidationError(f"Git HTTPS validation failed. repo={repo}") from exc
 
@@ -235,7 +234,8 @@ def validate_openai_key_and_model(
             raise ValidationError("OPENAI_API_KEY is invalid (OpenAI /v1/models returned 401).")
         if resp.status_code >= 400:
             raise ValidationError(
-                f"OpenAI API key validation failed: status={resp.status_code}, body={resp.text[:300]}"
+                "OpenAI API key validation failed: "
+                f"status={resp.status_code}, body={resp.text[:300]}"
             )
 
         # Model access check (best-effort).
@@ -251,7 +251,9 @@ def validate_openai_key_and_model(
                 )
             if resp2.status_code >= 400:
                 raise ValidationError(
-                    f"OpenAI model validation failed: model={model_name} status={resp2.status_code} "
+                    "OpenAI model validation failed: "
+                    f"model={model_name} "
+                    f"status={resp2.status_code} "
                     f"body={resp2.text[:300]}"
                 )
 
@@ -339,5 +341,3 @@ def validate_all(*, settings: AppSettings) -> None:
     if errors:
         error_message = "Startup validation failed:\n\n" + "\n".join(f"  - {err}" for err in errors)
         raise ValidationError(error_message)
-
-

@@ -1,3 +1,1 @@
 """Domain logic package."""
-
-

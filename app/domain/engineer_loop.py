@@ -421,7 +421,9 @@ class EngineerLoop:
 
     def _safe_report_failure(self, *, repo: str, issue_number: int, error: str) -> None:
         try:
-            self._logger.info("posting failure comment to issue: repo=%s issue=%s", repo, issue_number)
+            self._logger.info(
+                "posting failure comment to issue: repo=%s issue=%s", repo, issue_number
+            )
             self._github_client.create_issue_comment(
                 repo=repo,
                 issue_number=issue_number,
@@ -460,5 +462,3 @@ class EngineerLoop:
             os.replace(tmp_path, out_path)
         except Exception:  # noqa: BLE001
             return
-
-

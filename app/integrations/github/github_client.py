@@ -246,5 +246,3 @@ class GitHubClient:
             return
         message = resp.text
         raise GitHubApiError(status_code=resp.status_code, message=message)
-
-

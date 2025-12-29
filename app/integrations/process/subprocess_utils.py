@@ -66,5 +66,3 @@ class CommandRunner:
             stdout=completed.stdout,
             stderr=completed.stderr,
         )
-
-
